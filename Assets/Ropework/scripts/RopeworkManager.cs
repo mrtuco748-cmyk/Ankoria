@@ -74,8 +74,8 @@ namespace Ropework {
 				return;
 			}
 
-			// have to use SetSprite() because par[2] and par[3] might be keywords (e.g. "left", "right")
-			var newActor = SetSprite( string.Format("{0},{1},{2}", spriteName, par.Length > 2 ? par[2] : "", par.Length > 3 ? par[3] : "" ) );
+			// have to use CreateSprite() because par[2] and par[3] might be keywords (e.g. "left", "right")
+			var newActor = CreateSprite( string.Format("{0},{1},{2}", spriteName, par.Length > 2 ? par[2] : "", par.Length > 3 ? par[3] : "" ) );
 
 			// define text label BG color
 			var actorColor = Color.black;
@@ -111,8 +111,13 @@ namespace Ropework {
 		// SetSprite(spriteName,positionX,positionY)
 		// generic function for sprite drawing
 		[YarnCommand("Show")]
-		public Image SetSprite(params string[] parameters) {
+		public void SetSprite(params string[] parameters) {
 			var par = CleanParams( parameters );
+
+			if (par.Length == 0 || string.IsNullOrEmpty(par[0])) {
+				Debug.LogErrorFormat(this, "Ropework <<Show>> needs at least a sprite name");
+				return;
+			}
 
 			// set sprite
 			var spriteName = par[0];
@@ -127,6 +132,16 @@ namespace Ropework {
 			}
 
 			// actually instantiate and draw sprite now
+			SetSpriteActual( spriteName, pos );
+		}
+
+		// Internal helper that returns the Image for use by SetActor etc. (not a YarnCommand)
+		public Image CreateSprite(params string[] parameters) {
+			var par = CleanParams( parameters );
+			var spriteName = par[0];
+			var pos = new Vector2(0.5f, 0.5f);
+			if ( par.Length > 1 ) pos.x = ConvertCoordinates(par[1]);
+			if ( par.Length > 2 ) pos.y = ConvertCoordinates(par[2]);
 			return SetSpriteActual( spriteName, pos );
 		}
 

@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using System.Collections;
 using UnityEngine.UI;
 using System.Text;
@@ -56,7 +56,10 @@ namespace Ropework {
 		// changes background image
 		[YarnCommand("Scene")]
 		public void DoSceneChange(string spriteName) {
-			bgImage.sprite = FetchAsset<Sprite>(spriteName);
+			if (bgImage == null) { Debug.LogError("RopeworkManager bgImage not assigned"); return; }
+			var asset = FetchAsset<Sprite>(spriteName);
+			if (asset == null) return;
+			bgImage.sprite = asset;
 		}
 
 		// SetActor(actorName,spriteName,positionX,positionY,color)
@@ -189,8 +192,8 @@ namespace Ropework {
 		// hides all sprites (but doesn't clear the background image)
 		[YarnCommand("HideAll")]
 		public void HideAllSprites() {
-			foreach ( var spr in sprites ) {
-				HideSprite( spr.name );
+			foreach ( var spr in new System.Collections.Generic.List<Image>(sprites) ) {
+				if (spr != null) HideSprite( spr.name );
 			}
 		}
 
@@ -214,6 +217,7 @@ namespace Ropework {
 				Debug.LogErrorFormat(this, "Ropework <<Move>> couldn't parse moveSpeed [{0}] as a number", pars[3] );
 			}
 			// actually do the moving now
+			if (image == null) { Debug.LogErrorFormat(this, "Ropework <<Move>> can't find sprite [{0}]", pars[0]); return; }
 			StartCoroutine( MoveCoroutine( image, Vector2.Scale(newPos, new Vector2(1280f, 720f) ), moveTime) );
 		}
 
@@ -221,6 +225,7 @@ namespace Ropework {
 		[YarnCommand("Flip")]
 		public void FlipSprite(string actorOrSpriteName) {
 			var image = FindActorOrSprite( actorOrSpriteName );
+			if (image == null) return;
 			image.rectTransform.localScale = Vector3.Scale(image.rectTransform.localScale, new Vector3(-1f, 1f, 1f) );
 		}
 
@@ -232,6 +237,8 @@ namespace Ropework {
 			var pars = CleanParams( parameters );
 
 			var audioClip = FetchAsset<AudioClip>(pars[0]);
+			if (audioClip == null) return;
+			if (myAudioSource == null) { Debug.LogError("RopeworkManager myAudioSource not assigned"); return; }
 			// detect volume setting
 			float volume = 1f;
 			if ( pars.Length > 1 ) { // if parsing fails or second parameter isn't present, default to 100% volume
@@ -364,9 +371,10 @@ namespace Ropework {
 		#region Utility
 
 		// called by ClassicDialogueUI to highlight a sprite when it's talking
+		private Coroutine _highlightCoroutine;
 		public void HighlightSprite (Image sprite) {
-			StopCoroutine( "HighlightSpriteCoroutine" ); // use StartCoroutine(string) overload so that we can Stop and Start the coroutine (it doesn't work otherwise?)
-			StartCoroutine( "HighlightSpriteCoroutine", sprite );
+			if (_highlightCoroutine != null) StopCoroutine(_highlightCoroutine);
+			_highlightCoroutine = StartCoroutine( HighlightSpriteCoroutine(sprite) );
 		}
 
 		// called by HighlightSprite
@@ -390,6 +398,7 @@ namespace Ropework {
 		}
 
 		IEnumerator MoveCoroutine(Image image, Vector2 newAnchorPos, float moveTime ) {
+			if (image == null) yield break;
 			Vector2 startPos = image.rectTransform.anchoredPosition;
 			float t = 0f;
 			while (t < 1f ) {
@@ -410,16 +419,19 @@ namespace Ropework {
 			float t = 0f;
 			while ( t < 1f ) {
 				t += Time.deltaTime / Mathf.Max(0.001f, fadeTime); // Math.Max to prevent divide by zero error
-				fadeBG.color = Color.Lerp( startColor, fadeColor, t );
+				if (fadeBG != null) fadeBG.color = Color.Lerp( startColor, fadeColor, t );
 				yield return 0;
 			}
 		}
 
 		Image SetSpriteActual(string spriteName, Vector2 position) {
+			if (genericSprite == null) { Debug.LogError("RopeworkManager genericSprite prefab not assigned"); return null; }
+			var spriteAsset = FetchAsset<Sprite>( spriteName );
+			if (spriteAsset == null) return null;
 			var newSpriteObject = Instantiate<Image>(genericSprite, genericSprite.transform.parent);
 			sprites.Add(newSpriteObject);
 			newSpriteObject.name = spriteName;
-			newSpriteObject.sprite = FetchAsset<Sprite>( spriteName );
+			newSpriteObject.sprite = spriteAsset;
 			newSpriteObject.SetNativeSize();
 			newSpriteObject.rectTransform.anchoredPosition = Vector2.Scale( position, new Vector2( 1280f, 720f ) );
 			return newSpriteObject;

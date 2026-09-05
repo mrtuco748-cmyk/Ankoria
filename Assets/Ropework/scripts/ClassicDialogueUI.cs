@@ -28,8 +28,10 @@ namespace Yarn.Unity.Example {
                 dialogueContainer.SetActive(false);
             if (lineText != null)
                 lineText.gameObject.SetActive (false);
-            foreach (var button in optionButtons) {
-                button.gameObject.SetActive (false);
+            if (optionButtons != null) {
+                foreach (var button in optionButtons) {
+                    if (button != null) button.gameObject.SetActive (false);
+                }
             }
             if (continuePrompt != null)
                 continuePrompt.SetActive (false);
@@ -37,6 +39,7 @@ namespace Yarn.Unity.Example {
 
         public override async YarnTask RunLineAsync(LocalizedLine line, LineCancellationToken token)
         {
+            if (lineText == null) { Debug.LogError("ClassicDialogueUI lineText not assigned"); return; }
             lineText.gameObject.SetActive (true);
 
             string speakerName = "";
@@ -47,17 +50,20 @@ namespace Yarn.Unity.Example {
                 lineTextDisplay = splitLine[1].Trim();
             }
             
-            if ( speakerName.Length > 0 ) {
-                nameText.transform.parent.gameObject.SetActive(true);
-                nameText.text = speakerName;
-                if ( ropework != null && ropework.actorColors.ContainsKey(speakerName) ) {
-                    nameText.transform.parent.GetComponent<Image>().color = ropework.actorColors[speakerName];
+            if (nameText != null) {
+                if ( speakerName.Length > 0 ) {
+                    if (nameText.transform.parent != null) nameText.transform.parent.gameObject.SetActive(true);
+                    nameText.text = speakerName;
+                    if ( ropework != null && ropework.actorColors.ContainsKey(speakerName) ) {
+                        var img = nameText.transform.parent.GetComponent<Image>();
+                        if (img != null) img.color = ropework.actorColors[speakerName];
+                    }
+                    if ( ropework != null && ropework.actors.ContainsKey(speakerName) ) {
+                        ropework.HighlightSprite( ropework.actors[speakerName] );
+                    }
+                } else {
+                    if (nameText.transform.parent != null) nameText.transform.parent.gameObject.SetActive(false);
                 }
-                if ( ropework != null && ropework.actors.ContainsKey(speakerName) ) {
-                    ropework.HighlightSprite( ropework.actors[speakerName] );
-                }
-            } else {
-                nameText.transform.parent.gameObject.SetActive(false);
             }
 
             if (textSpeed > 0.0f) {
@@ -92,16 +98,20 @@ namespace Yarn.Unity.Example {
             while (!token.NextContentToken.IsCancellationRequested && !Input.anyKeyDown) {
                 await YarnTask.Yield();
             }
-            // wait one frame to consume the key press
             await YarnTask.Yield();
 
             if (continuePrompt != null)
                 continuePrompt.SetActive (false);
         }
 
-        [System.Obsolete]
-        public override async YarnTask<DialogueOption> RunOptionsAsync(DialogueOption[] dialogueOptions, CancellationToken cancellationToken)
+        public override async YarnTask<DialogueOption> RunOptionsAsync(DialogueOption[] dialogueOptions, LineCancellationToken cancellationToken)
         {
+            var ct = cancellationToken.NextContentToken;
+            if (optionButtons == null || optionButtons.Count == 0) {
+                Debug.LogError("ClassicDialogueUI optionButtons not assigned");
+                await YarnTask.Yield();
+                return dialogueOptions.Length > 0 ? dialogueOptions[0] : null;
+            }
             if (dialogueOptions.Length > optionButtons.Count) {
                 Debug.LogWarning("There are more options to present than there are buttons.");
             }
@@ -112,35 +122,28 @@ namespace Yarn.Unity.Example {
             int i = 0;
             foreach (var option in dialogueOptions) {
                 if (i >= optionButtons.Count) break;
+                if (optionButtons[i] == null) { i++; continue; }
                 optionButtons[i].gameObject.SetActive (true);
-                optionButtons[i].GetComponentInChildren<Text>().text = option.Line.Text.Text;
-                // capture index
-                int idx = i;
+                var txt = optionButtons[i].GetComponentInChildren<Text>();
+                if (txt != null) txt.text = option.Line.Text.Text;
                 var opt = option;
                 optionButtons[i].onClick.RemoveAllListeners();
                 optionButtons[i].onClick.AddListener(() => SetOption(opt));
                 i++;
             }
 
-            while (!_optionSelected && !cancellationToken.IsCancellationRequested) {
+            while (!_optionSelected && !ct.IsCancellationRequested) {
                 await YarnTask.Yield();
             }
 
             foreach (var button in optionButtons) {
+                if (button == null) continue;
                 button.gameObject.SetActive (false);
                 button.onClick.RemoveAllListeners();
             }
 
-            if (cancellationToken.IsCancellationRequested) return null;
+            if (ct.IsCancellationRequested) return null;
             return _selectedOption;
-        }
-
-        // Overload with LineCancellationToken (Yarn 3.2)
-        public override async YarnTask<DialogueOption> RunOptionsAsync(DialogueOption[] dialogueOptions, LineCancellationToken cancellationToken)
-        {
-#pragma warning disable CS0618
-            return await RunOptionsAsync(dialogueOptions, cancellationToken.NextContentToken);
-#pragma warning restore CS0618
         }
 
         public void SetOption(DialogueOption selectedOption)
@@ -149,10 +152,8 @@ namespace Yarn.Unity.Example {
             _optionSelected = true;
         }
 
-        // Called by Unity UI Button with int index (legacy)
         public void SetOption(int selectedOptionIndex)
         {
-            // fallback if wired via inspector with int
             Debug.LogWarning("SetOption(int) called - use DialogueOption overload. Index: " + selectedOptionIndex);
             _optionSelected = true;
         }
